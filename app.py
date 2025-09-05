@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import json
 from oauth2client.service_account import ServiceAccountCredentials
 import plotly.express as px
 from datetime import datetime
@@ -17,10 +18,14 @@ st.set_page_config(
 # ------------------------------
 # LOAD DATA FROM GOOGLE SHEETS
 # ------------------------------
+# Define scopes
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-import json
+
+# Load creds from Streamlit Cloud secrets
 creds_dict = json.loads(st.secrets["creds"])
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+
+# Authorize client
 client = gspread.authorize(creds)
 
 # Replace with your sheet name
