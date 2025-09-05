@@ -18,7 +18,9 @@ st.set_page_config(
 # LOAD DATA FROM GOOGLE SHEETS
 # ------------------------------
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
+import json
+creds_dict = json.loads(st.secrets["creds"])
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
 # Replace with your sheet name
