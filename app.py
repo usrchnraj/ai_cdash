@@ -22,7 +22,7 @@ st.set_page_config(
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
 # Load creds from Streamlit Cloud secrets
-creds_dict = json.loads(st.secrets["creds"])
+creds_dict = dict(st.secrets["creds"])  # already a dict
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 
 # Authorize client
