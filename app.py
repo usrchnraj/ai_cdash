@@ -1,155 +1,218 @@
 import os
 import json
 import streamlit as st
-import gspread
-import json
-from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
+import numpy as np
 import plotly.express as px
-from datetime import datetime
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
-# -----------------------------
-# GOOGLE SHEETS AUTH (works both local & cloud)
-# -----------------------------
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+# ----------------- PAGE CONFIG -----------------
+st.set_page_config(page_title="Doctor Ops Intelligence", layout="wide")
 
-try:
-    # Streamlit Cloud
-    creds_dict = dict(st.secrets["creds"])
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-except Exception:
-    # Local development
-    with open("creds.json") as f:
-        creds_dict = json.load(f)
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-
-client = gspread.authorize(creds)
-
-# Load the first sheet
-sheet = client.open("Dummy_calls_data").sheet1
-data = sheet.get_all_records()
-df = pd.DataFrame(data)
-
-# -----------------------------
-# DATA CLEANING & METRICS
-# -----------------------------
-df["Call Duration(mins)"] = df["Call Duration(secs)"] / 60
-
-total_calls = len(df)
-answered_calls = df[df["Appointment Status"] == "Booked"].shape[0]
-missed_calls = total_calls - answered_calls
-queries_resolved = df[df["Query Resolved"] == "Yes"].shape[0]
-avg_duration = df["Call Duration(mins)"].mean()
-
-# ROI: 200$ per appointment booked - 100$ fee
-revenue = answered_calls * 200
-roi = revenue - 100
-
-# -----------------------------
-# STREAMLIT DASHBOARD LAYOUT
-# -----------------------------
-st.set_page_config(page_title="AI Call Dashboard", layout="wide")
-
+# ---------- Custom CSS for styling ----------
 st.markdown(
     """
     <style>
-    .main {
-        background-color: #fff9f4;
+    /* Global gradient background */
+    .stApp {
+        background: linear-gradient(to bottom right, #fff8dc, #ffcc80);
+        font-family: 'Poppins', sans-serif;
     }
-    .big-title {
-        font-size: 36px !important;
-        color: #ff6f3c;
+
+    /* Load custom Google font */
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+
+    /* Greeting banner */
+    .banner {
+        background: linear-gradient(90deg, #ffecb3, #ffb74d);
+        padding: 1.5rem;
+        border-radius: 1rem;
         text-align: center;
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: #5d4037;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+        margin-bottom: 1.5rem;
+    }
+
+    /* KPI Cards */
+    .metric-card {
+        background-color: white;
+        border-radius: 1rem;
+        padding: 1.2rem;
+        text-align: center;
+        box-shadow: 1px 3px 8px rgba(0,0,0,0.1);
+        margin: 0.5rem;
+        font-size: 1.1rem;
+        color: #5d4037;  /* <-- Warm brown for labels */
+        font-weight: 500;
+    }
+
+    .metric-value {
+        font-size: 1.8rem;
         font-weight: bold;
-        margin-bottom: 10px;
+        color: #e65100;  /* <-- Orange for numbers */
     }
-    .sub-title {
-        font-size: 18px !important;
-        color: #444;
-        text-align: center;
-        margin-bottom: 30px;
+
+    /* Section headings */
+    h4, h3 {
+        color: #e65100 !important;  /* Deep orange to pop */
+        font-weight: 600;
     }
-    .greeting-box {
-        background-color: #ffe5d0;
-        padding: 15px;
-        border-radius: 12px;
-        text-align: center;
-        font-size: 20px;
-        font-weight: bold;
-        margin-bottom: 25px;
-        color: #333;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
+
+    /* Hide Streamlit default menu & footer */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-# Dynamic greeting
-hour = datetime.now().hour
-if hour < 12:
-    greeting = "Good Morning"
-elif hour < 18:
-    greeting = "Good Afternoon"
+# ---------- Google Sheets Connection ----------
+@st.cache_data(ttl=60)
+def load_data() -> pd.DataFrame:
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+
+    if os.path.exists("creds.json"):
+        creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
+        client = gspread.authorize(creds)
+    elif "gcp_service_account" in st.secrets:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
+    else:
+        st.error("No credentials found. Provide creds.json locally or set Streamlit secrets.")
+        st.stop()
+
+    sheet_file = client.open("call_audit_1")
+    sheet = sheet_file.sheet1
+    data = sheet.get_all_records()
+
+    df = pd.DataFrame(data)
+
+    if "ts_utc" in df.columns:
+        df["ts_utc"] = pd.to_datetime(df["ts_utc"], errors="coerce", utc=True)
+        df["date"] = df["ts_utc"].dt.date
+        df["hour"] = df["ts_utc"].dt.hour
+        df["weekday"] = df["ts_utc"].dt.day_name().str.slice(0, 3)
+
+    if "success" in df.columns:
+        df["success"] = df["success"].astype(str).str.lower().isin(["true", "1", "yes"])
+
+        def outcome(row):
+            if row["success"] and pd.notna(row.get("booking_id", None)):
+                return "BOOKED"
+            ec = str(row.get("error_code", "")).upper()
+            if ec in ("SLOT_UNAVAILABLE", "SLOT_BUSY"):
+                return "SLOT_UNAVAILABLE"
+            if ec == "SLOT_CLOSED":
+                return "CLOSED"
+            return "OTHER"
+
+        df["outcome"] = df.apply(outcome, axis=1)
+
+    return df
+
+
+try:
+    df = load_data()
+except Exception as e:
+    st.error(f"Could not load data from Google Sheets: {e}")
+    st.stop()
+
+# ---------- Sidebar filters ----------
+st.sidebar.header("Filters")
+if "date" in df.columns:
+    min_date, max_date = (df["date"].min(), df["date"].max())
+    date_range = st.sidebar.date_input("Date range", value=(min_date, max_date))
 else:
-    greeting = "Good Evening"
+    date_range = None
 
-# Header
-st.markdown("<div class='big-title'>📞 Welcome to Your AI Call Dashboard</div>", unsafe_allow_html=True)
-st.markdown("<div class='sub-title'>Track your calls, queries, and ROI in real-time</div>", unsafe_allow_html=True)
-st.markdown(f"<div class='greeting-box'>{greeting}, Dr. [Name]! 👋 Here’s how your AI assistant is doing today.</div>", unsafe_allow_html=True)
+clinics = st.sidebar.multiselect("Clinic", sorted(df["clinic_name"].dropna().unique())) if "clinic_name" in df.columns else []
+doctors = st.sidebar.multiselect("Doctor", sorted(df["doctor"].dropna().unique())) if "doctor" in df.columns else []
 
-# Metrics row
-col1, col2, col3, col4, col5 = st.columns(5)
-col1.metric("📊 Total Calls", total_calls)
-col2.metric("✅ Answered Calls", answered_calls)
-col3.metric("❌ Missed Calls", missed_calls)
-col4.metric("💡 Queries Resolved", queries_resolved)
-col5.metric("⏱️ Avg Duration (mins)", f"{avg_duration:.2f}")
+avg_value = st.sidebar.number_input("Avg visit value ($)", value=200.0, step=10.0)
+monthly_fee = st.sidebar.number_input("Monthly fee ($)", value=100.0, step=10.0)
 
-# ROI section
-st.markdown("### 💵 ROI Overview")
-col1, col2 = st.columns(2)
-col1.metric("Revenue Generated", f"£{revenue}")
-col2.metric("Net ROI", f"£{roi}")
+q = df.copy()
+if date_range and isinstance(date_range, (list, tuple)) and len(date_range) == 2 and "date" in q.columns:
+    q = q[(q["date"] >= date_range[0]) & (q["date"] <= date_range[1])]
+if clinics:
+    q = q[q["clinic_name"].isin(clinics)]
+if doctors:
+    q = q[q["doctor"].isin(doctors)]
 
-# -----------------------------
-# TODAY VS YESTERDAY COMPARISON
-# -----------------------------
-if "Call Date" in df.columns:
-    df["Call Date"] = pd.to_datetime(df["Call Date"])
-    today = pd.to_datetime("today").normalize()
-    yesterday = today - pd.Timedelta(days=1)
+# ---------- Greeting Banner ----------
+served_today = int((df["date"] == pd.Timestamp.utcnow().date()).sum()) if "date" in df.columns else 0
+booked = int(q[(q["outcome"] == "BOOKED")].shape[0]) if "outcome" in q.columns else 0
+recovered_revenue = booked * avg_value
+roi_multiple = (recovered_revenue - monthly_fee) if monthly_fee > 0 else np.nan
 
-    today_calls = df[df["Call Date"] == today].shape[0]
-    yesterday_calls = df[df["Call Date"] == yesterday].shape[0]
+st.markdown(
+    f"""
+    <div class="banner">
+        🌞 Good morning, Dr [Name]! <br>
+        We served <b>{served_today}</b> patients today. <br>
+        🎉 Your net ROI generated is <b>${roi_multiple:,.0f}</b>. Keep shining! ✨
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-    delta = today_calls - yesterday_calls
+# ---------- KPI Cards ----------
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.markdown(f"<div class='metric-card'>💰 Net ROI<br><span class='metric-value'>${roi_multiple:,.0f}</span></div>", unsafe_allow_html=True)
+with c2:
+    st.markdown(f"<div class='metric-card'>📞 Calls Received<br><span class='metric-value'>{q.shape[0]:,}</span></div>", unsafe_allow_html=True)
+with c3:
+    call_handling_pct = float((q["success"].mean() * 100) if "success" in q.columns and len(q) else 0.0)
+    st.markdown(f"<div class='metric-card'>🤝 Call Handling %<br><span class='metric-value'>{call_handling_pct:,.1f}%</span></div>", unsafe_allow_html=True)
 
-    st.markdown("### 📅 Call Volume Comparison")
-    st.metric("Calls Today vs Yesterday", today_calls, delta=delta)
+# ---------- Charts ----------
+st.markdown("#### 📈 Trend (Attempts vs Booked)")
+if "outcome" in q.columns and "date" in q.columns:
+    trend = q.groupby("date").agg(
+        attempts=("outcome", "size"),
+        booked=("outcome", lambda s: (s == "BOOKED").sum())
+    ).reset_index()
+    if not trend.empty:
+        fig1 = px.line(
+            trend, x="date", y=["attempts", "booked"], 
+            markers=True, 
+            color_discrete_sequence=["#e53935", "#fbc02d"]
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.info("No data for selected filters.")
 
-# -----------------------------
-# VISUALS
-# -----------------------------
-st.markdown("### 📈 Trends & Insights")
+st.markdown("#### 🔥 Demand Heatmap (Attempts by Weekday × Hour)")
+if "weekday" in q.columns and "hour" in q.columns:
+    heat = q.groupby(["weekday", "hour"]).size().reset_index(name="attempts")
+    wk_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    heat["weekday"] = pd.Categorical(heat["weekday"], categories=wk_order, ordered=True)
+    heat = heat.sort_values(["weekday", "hour"])
+    if not heat.empty:
+        fig2 = px.density_heatmap(
+            heat, x="hour", y="weekday", z="attempts", 
+            nbinsx=24, color_continuous_scale="YlOrRd"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+    else:
+        st.info("No attempts to show in heatmap.")
 
-status_fig = px.histogram(df, x="Appointment Status", color="Appointment Status",
-                          title="Appointment Status Distribution",
-                          text_auto=True)
-st.plotly_chart(status_fig, use_container_width=True)
+# ---------- Operations Table ----------
+st.markdown("#### 📋 Operations (latest 500)")
+ops_cols = [c for c in ["ts_utc", "clinic_name", "doctor", "outcome", "latency_ms", "booking_id", "error_code", "preferred_dt_local"] if c in q.columns]
+ops = q.sort_values("ts_utc", ascending=False).head(500)[ops_cols] if "ts_utc" in q.columns else q.head(500)
+st.dataframe(ops, use_container_width=True)
 
-if "Call Date" in df.columns:
-    calls_per_day = df.groupby("Call Date").size().reset_index(name="Total Calls")
-    date_fig = px.line(calls_per_day, x="Call Date", y="Total Calls",
-                       title="Daily Calls Trend", markers=True)
-    st.plotly_chart(date_fig, use_container_width=True)
+st.download_button("⬇️ Download filtered CSV", data=q.to_csv(index=False), file_name="filtered_calls.csv", mime="text/csv")
 
-# -----------------------------
-# RAW DATA
-# -----------------------------
-with st.expander("🔍 View Raw Data"):
-    st.dataframe(df)
+
+
 
 
 
