@@ -110,8 +110,8 @@ col5.metric("⏱️ Avg Duration (mins)", f"{avg_duration:.2f}")
 # ROI section
 st.markdown("### 💵 ROI Overview")
 col1, col2 = st.columns(2)
-col1.metric("Revenue Generated", f"${revenue}")
-col2.metric("Net ROI", f"${roi}")
+col1.metric("Revenue Generated", f"£{revenue}")
+col2.metric("Net ROI", f"£{roi}")
 
 # -----------------------------
 # TODAY VS YESTERDAY COMPARISON
