@@ -79,7 +79,7 @@ def load_data() -> pd.DataFrame:
         creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
         client = gspread.authorize(creds)
     elif "gcp_service_account" in st.secrets:
-        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds_dict = dict(st.secrets["creds"])
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
     else:
