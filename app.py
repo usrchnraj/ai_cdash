@@ -9,7 +9,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 
 # ----------------- PAGE CONFIG -----------------
-st.set_page_config(page_title="Doctor Ops Intelligence", layout="wide")
+st.set_page_config(
+    page_title="Doctor Ops Intelligence",
+    layout="wide",
+    initial_sidebar_state="expanded"   # 👈 keep sidebar accessible on load
+)
 
 # ----------------- THEME & CSS -----------------
 st.markdown(
@@ -64,14 +68,67 @@ st.markdown(
         font-weight: 600 !important;
     }
 
-    /* Hide Streamlit default menu & footer */
+    /* App header (top bar) */
+    header[data-testid="stHeader"] {
+        background: linear-gradient(to right, #fff8dc, #ffcc80);
+        color: #5d4037;
+    }
+
+    /* Sidebar toggle chevrons (>>> arrows) */
+    header[data-testid="stHeader"] button[kind="header"] svg {
+        fill: #333333 !important;  /* warm brown, high contrast */
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+
+    /* Sidebar background with gradient */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(to bottom, #fff8e1, #ffe0b2);
+        color: #5d4037;
+        font-family: 'Poppins', sans-serif;
+        padding: 1rem;
+    }
+
+    /* Sidebar header text */
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3 {
+        color: #e65100 !important;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+
+    /* Sidebar widget labels */
+    section[data-testid="stSidebar"] label {
+        color: #5d4037 !important;
+        font-weight: 500;
+    }
+
+    /* Sidebar inputs (dropdowns, multiselects) */
+    section[data-testid="stSidebar"] .stSelectbox, 
+    section[data-testid="stSidebar"] .stMultiSelect {
+        background-color: #ffffff !important;
+        border: 1px solid #ffb74d !important;
+        border-radius: 0.6rem !important;
+        padding: 0.3rem !important;
+        box-shadow: 1px 2px 5px rgba(0,0,0,0.1);
+    }
+
+    /* Sidebar divider line */
+    section[data-testid="stSidebar"] hr {
+        border: 0;
+        height: 1px;
+        background: #ffcc80;
+        margin: 1rem 0;
+    }
+
+    /* Hide only menu & footer, keep header visible */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
     </style>
-    """,
-    unsafe_allow_html=True,
+    """, unsafe_allow_html=True
 )
+
 
 # ----------------- CONFIG (kept internal) -----------------
 AVG_VISIT_VALUE = 200.0   # kept for net ROI calc, not shown in UI
@@ -136,7 +193,7 @@ except Exception as e:
     st.stop()
 
 # ----------------- SIDEBAR (VIEW OPTIONS) -----------------
-st.sidebar.header("✨ View Options")
+st.sidebar.header("📂 Data Filters")
 
 # Quick time-range selector (affects all KPIs/charts)
 def get_date_range(choice: str):
@@ -192,7 +249,7 @@ st.markdown(
     <div class="banner">
         🌞 Good {('morning' if datetime.now().hour < 12 else ('afternoon' if datetime.now().hour < 18 else 'evening'))}, Dr [Name]!<br>
         We served <b>{served_count}</b> patients {period_label}.<br>
-        🎉 Your net ROI generated is <b>${net_roi:,.0f}</b>. Keep shining! ✨
+        🎉 Your net ROI generated is <b>£{net_roi:,.0f}</b>. Keep shining! ✨
     </div>
     """,
     unsafe_allow_html=True,
@@ -205,7 +262,7 @@ call_handling_pct = float((q["success"].mean() * 100) if "success" in q.columns 
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(
-        f"<div class='metric-card'>💰 Net ROI<span class='metric-value'>${net_roi:,.0f}</span></div>",
+        f"<div class='metric-card'>💰 Net ROI<span class='metric-value'>£{net_roi:,.0f}</span></div>",
         unsafe_allow_html=True
     )
 with c2:
