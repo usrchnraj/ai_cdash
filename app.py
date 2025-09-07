@@ -133,8 +133,8 @@ else:
 clinics = st.sidebar.multiselect("Clinic", sorted(df["clinic_name"].dropna().unique())) if "clinic_name" in df.columns else []
 doctors = st.sidebar.multiselect("Doctor", sorted(df["doctor"].dropna().unique())) if "doctor" in df.columns else []
 
-avg_value = st.sidebar.number_input("Avg visit value ($)", value=200.0, step=10.0)
-monthly_fee = st.sidebar.number_input("Monthly fee ($)", value=100.0, step=10.0)
+avg_value = st.sidebar.number_input("Avg visit value (£)", value=200.0, step=10.0)
+monthly_fee = st.sidebar.number_input("Monthly fee (£)", value=100.0, step=10.0)
 
 q = df.copy()
 if date_range and isinstance(date_range, (list, tuple)) and len(date_range) == 2 and "date" in q.columns:
@@ -155,7 +155,7 @@ st.markdown(
     <div class="banner">
         🌞 Good morning, Dr [Name]! <br>
         We served <b>{served_today}</b> patients today. <br>
-        🎉 Your net ROI generated is <b>${roi_multiple:,.0f}</b>. Keep shining! ✨
+        🎉 Your net ROI generated is <b>£{roi_multiple:,.0f}</b>. Keep shining! ✨
     </div>
     """,
     unsafe_allow_html=True,
@@ -164,7 +164,7 @@ st.markdown(
 # ---------- KPI Cards ----------
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown(f"<div class='metric-card'>💰 Net ROI<br><span class='metric-value'>${roi_multiple:,.0f}</span></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='metric-card'>💰 Net ROI<br><span class='metric-value'>£{roi_multiple:,.0f}</span></div>", unsafe_allow_html=True)
 with c2:
     st.markdown(f"<div class='metric-card'>📞 Calls Received<br><span class='metric-value'>{q.shape[0]:,}</span></div>", unsafe_allow_html=True)
 with c3:
