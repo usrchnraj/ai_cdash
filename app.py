@@ -87,7 +87,7 @@ def load_data() -> pd.DataFrame:
         st.stop()
 
     sheet_file = client.open("call_audit_1")
-    sheet = sheet_file.sheet1
+    sheet = sheet_file.get_worksheet(1)  # 0 = first sheet, 1 = second sheet(more dummy data)
     data = sheet.get_all_records()
 
     df = pd.DataFrame(data)
