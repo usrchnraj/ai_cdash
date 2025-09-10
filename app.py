@@ -141,35 +141,30 @@ WORKSHEET_INDEX = 1               # set to 1 if you want the second sheet/tab
 def load_data() -> pd.DataFrame:
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-    # Option 1: Local creds.json
+    # Local creds.json
     if os.path.exists("creds.json"):
         creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
         client = gspread.authorize(creds)
-        sheet_file = client.open(SHEET_NAME)
-        sheet = sheet_file.get_worksheet(WORKSHEET_INDEX)
-        data = sheet.get_all_records()
-        df = pd.DataFrame(data)
-        return df
 
-    # Option 2: Streamlit Cloud secrets
+    # Streamlit Cloud secrets
     elif "creds" in st.secrets:
         creds_dict = dict(st.secrets["creds"])
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-        sheet_file = client.open(SHEET_NAME)
-        sheet = sheet_file.get_worksheet(WORKSHEET_INDEX)
-        data = sheet.get_all_records()
-        df = pd.DataFrame(data)
-        return df
-
-    # Option 3: Local fallback CSV (committed to GitHub repo)
-    elif os.path.exists("call_audit_1.csv"):
-        df = pd.read_csv("call_audit_1.csv")
-        return df
 
     else:
-        st.error("No data source found. Provide creds.json, set Streamlit secrets, or include data.csv in the repo.")
+        st.error("No credentials found. Provide creds.json locally or set Streamlit secrets.")
         st.stop()
+
+    sheet_file = client.open(SHEET_NAME)
+    # Use worksheet by index so you can switch to the second tab by setting WORKSHEET_INDEX = 1
+    sheet = sheet_file.get_worksheet(WORKSHEET_INDEX)
+    data = sheet.get_all_records()
+    df = pd.DataFrame(data)
+
+
+
+
 
     # ---- Transformations ----
     if "ts_utc" in df.columns:
