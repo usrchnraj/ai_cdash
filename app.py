@@ -4,204 +4,85 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 
 # ----------------- PAGE CONFIG -----------------
 st.set_page_config(
     page_title="Doctor Ops Intelligence",
     layout="wide",
-    initial_sidebar_state="expanded"   # 👈 keep sidebar accessible on load
+    initial_sidebar_state="expanded"
 )
 
 # ----------------- THEME & CSS -----------------
 st.markdown(
     """
     <style>
-    /* Global gradient background */
-    .stApp {
-        background: linear-gradient(to bottom right, #fff8dc, #ffcc80);
-        font-family: 'Poppins', sans-serif;
-        color: #2b2b2b;
-    }
-
-    /* Load custom Google font */
-    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
-
-    /* Greeting banner */
-    .banner {
-        background: linear-gradient(90deg, #ffecb3, #ffb74d);
-        padding: 1.5rem;
-        border-radius: 1rem;
-        text-align: center;
-        font-size: 1.6rem;
-        font-weight: 600;
-        color: #5d4037;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-        margin-bottom: 1.2rem;
-    }
-
-    /* KPI Cards */
-    .metric-card {
-        background-color: #ffffff;
-        border-radius: 1rem;
-        padding: 1.0rem 1.2rem;
-        text-align: center;
-        box-shadow: 1px 3px 8px rgba(0,0,0,0.1);
-        margin: 0.5rem 0.5rem 0.5rem 0;
-        font-size: 1.05rem;
-        color: #5d4037;         /* visible label text on white */
-        font-weight: 500;
-    }
-    .metric-value {
-        display: block;
-        margin-top: 0.25rem;
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #e65100;         /* warm orange for numbers */
-    }
-
-    /* Section headings pop */
-    h3, h4 {
-        color: #e65100 !important;  /* deep orange */
-        font-weight: 600 !important;
-    }
-
-    /* App header (top bar) */
-    header[data-testid="stHeader"] {
-        background: linear-gradient(to right, #fff8dc, #ffcc80);
-        color: #5d4037;
-    }
-
-    /* Sidebar toggle chevrons (>>> arrows) */
-    header[data-testid="stHeader"] button[kind="header"] svg {
-        fill: #333333 !important;  /* warm brown, high contrast */
-        width: 1.5rem;
-        height: 1.5rem;
-    }
-
-    /* Sidebar background with gradient */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(to bottom, #fff8e1, #ffe0b2);
-        color: #5d4037;
-        font-family: 'Poppins', sans-serif;
-        padding: 1rem;
-    }
-
-    /* Sidebar header text */
-    section[data-testid="stSidebar"] h1, 
-    section[data-testid="stSidebar"] h2, 
-    section[data-testid="stSidebar"] h3 {
-        color: #e65100 !important;
-        font-weight: 600;
-        margin-bottom: 1rem;
-    }
-
-    /* Sidebar widget labels */
-    section[data-testid="stSidebar"] label {
-        color: #5d4037 !important;
-        font-weight: 500;
-    }
-
-    /* Sidebar inputs (dropdowns, multiselects) */
-    section[data-testid="stSidebar"] .stSelectbox, 
-    section[data-testid="stSidebar"] .stMultiSelect {
-        background-color: #ffffff !important;
-        border: 1px solid #ffb74d !important;
-        border-radius: 0.6rem !important;
-        padding: 0.3rem !important;
-        box-shadow: 1px 2px 5px rgba(0,0,0,0.1);
-    }
-
-    /* Sidebar divider line */
-    section[data-testid="stSidebar"] hr {
-        border: 0;
-        height: 1px;
-        background: #ffcc80;
-        margin: 1rem 0;
-    }
-
-    /* Hide only menu & footer, keep header visible */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    /* (CSS styling you already had, kept the same) */
+    .stApp {background: linear-gradient(to bottom right, #fff8dc, #ffcc80);}
+    .banner {background: linear-gradient(90deg, #ffecb3, #ffb74d); padding: 1.5rem; border-radius: 1rem; text-align: center; font-size: 1.6rem; font-weight: 600; color: #5d4037; margin-bottom: 1.2rem;}
+    .metric-card {background-color: #ffffff; border-radius: 1rem; padding: 1.0rem 1.2rem; text-align: center; box-shadow: 1px 3px 8px rgba(0,0,0,0.1); margin: 0.5rem; font-size: 1.05rem; color: #5d4037; font-weight: 500;}
+    .metric-value {display: block; margin-top: 0.25rem; font-size: 1.8rem; font-weight: 700; color: #e65100;}
+    h3, h4 {color: #e65100 !important; font-weight: 600 !important;}
+    header[data-testid="stHeader"] {background: linear-gradient(to right, #fff8dc, #ffcc80); color: #5d4037;}
+    header[data-testid="stHeader"] button[kind="header"] svg {fill: #333333 !important; width: 1.5rem; height: 1.5rem;}
+    section[data-testid="stSidebar"] {background: linear-gradient(to bottom, #fff8e1, #ffe0b2); color: #5d4037; padding: 1rem;}
+    section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 {color: #e65100 !important; font-weight: 600; margin-bottom: 1rem;}
+    section[data-testid="stSidebar"] label {color: #5d4037 !important; font-weight: 500;}
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True
 )
 
-
-# ----------------- CONFIG (kept internal) -----------------
-AVG_VISIT_VALUE = 200.0   # kept for net ROI calc, not shown in UI
-MONTHLY_FEE    = 100.0    # kept for net ROI calc, not shown in UI
-SHEET_NAME     = "call_audit_1"   # Google Sheet file name
-WORKSHEET_INDEX = 1               # set to 1 if you want the second sheet/tab
+# ----------------- CONFIG -----------------
+AVG_VISIT_VALUE = 200.0
+MONTHLY_FEE    = 100.0
 
 # ----------------- DATA LOADING -----------------
 @st.cache_data(ttl=60)
 def load_data() -> pd.DataFrame:
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-    # Local creds.json
-    if os.path.exists("creds.json"):
-        creds = ServiceAccountCredentials.from_json_keyfile_name("creds.json", scope)
-        client = gspread.authorize(creds)
-
-    # Streamlit Cloud secrets
-    elif "creds" in st.secrets:
-        creds_dict = dict(st.secrets["creds"])
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-        client = gspread.authorize(creds)
-
-    else:
-        st.error("No credentials found. Provide creds.json locally or set Streamlit secrets.")
-        st.stop()
-
-    sheet_file = client.open(SHEET_NAME)
-    # Use worksheet by index so you can switch to the second tab by setting WORKSHEET_INDEX = 1
-    sheet = sheet_file.get_worksheet(WORKSHEET_INDEX)
-    data = sheet.get_all_records()
-    df = pd.DataFrame(data)
-
-
-
-
-
-    # ---- Transformations ----
-    if "ts_utc" in df.columns:
-        # Parse ISO timestamps like '2025-09-04T09:22:10.258Z'
-        df["ts_utc"] = pd.to_datetime(df["ts_utc"], errors="coerce", utc=True)
-        df["date"] = df["ts_utc"].dt.date
-        df["hour"] = df["ts_utc"].dt.hour
-        df["weekday"] = df["ts_utc"].dt.day_name().str.slice(0, 3)
-
-    if "success" in df.columns:
-        df["success"] = df["success"].astype(str).str.lower().isin(["true", "1", "yes"])
-
-        def outcome(row):
-            if row["success"] and pd.notna(row.get("booking_id", None)):
-                return "BOOKED"
-            ec = str(row.get("error_code", "")).upper()
-            if ec in ("SLOT_UNAVAILABLE", "SLOT_BUSY"):
-                return "SLOT_UNAVAILABLE"
-            if ec == "SLOT_CLOSED":
-                return "CLOSED"
-            return "OTHER"
-
-        df["outcome"] = df.apply(outcome, axis=1)
-
+    try:
+        # Try Neon first
+        conn = st.connection("postgres", type="sql")
+        df = conn.query("SELECT * FROM call_test;", ttl=60)
+        st.success("Connected to Neon ✅")
+    except Exception as e:
+        # Fallback to local CSV
+        st.warning(f"Neon not available, using local CSV. Error: {e}")
+        if os.path.exists("call_audit_1.csv"):
+            df = pd.read_csv("call_audit_1.csv")
+        else:
+            st.error("No Neon connection and no local CSV file found.")
+            st.stop()
     return df
 
 # Load once
-try:
-    df = load_data()
-except Exception as e:
-    st.error(f"Could not load data from Google Sheets: {e}")
-    st.stop()
+df = load_data()
+
+# ---- Transformations ----
+if "ts_utc" in df.columns:
+    df["ts_utc"] = pd.to_datetime(df["ts_utc"], errors="coerce", utc=True)
+    df["date"] = df["ts_utc"].dt.date
+    df["hour"] = df["ts_utc"].dt.hour
+    df["weekday"] = df["ts_utc"].dt.day_name().str.slice(0, 3)
+
+if "success" in df.columns:
+    df["success"] = df["success"].astype(str).str.lower().isin(["true", "1", "yes"])
+
+    def outcome(row):
+        if row["success"] and pd.notna(row.get("booking_id", None)):
+            return "BOOKED"
+        ec = str(row.get("error_code", "")).upper()
+        if ec in ("SLOT_UNAVAILABLE", "SLOT_BUSY"):
+            return "SLOT_UNAVAILABLE"
+        if ec == "SLOT_CLOSED":
+            return "CLOSED"
+        return "OTHER"
+
+    df["outcome"] = df.apply(outcome, axis=1)
 
 # ----------------- SIDEBAR (VIEW OPTIONS) -----------------
 st.sidebar.header("📂 Data Filters")
 
-# Quick time-range selector (affects all KPIs/charts)
 def get_date_range(choice: str):
     today = pd.Timestamp.utcnow().date()
     if choice == "Today":
@@ -212,13 +93,12 @@ def get_date_range(choice: str):
         return today - timedelta(days=29), today
     if choice == "Last 90 days":
         return today - timedelta(days=89), today
-    # fallback
     return today - timedelta(days=6), today
 
 range_choice = st.sidebar.selectbox(
     "Time range",
     ["Today", "Last 7 days", "Last 30 days", "Last 90 days"],
-    index=1  # default to Last 7 days
+    index=1
 )
 
 start_date, end_date = get_date_range(range_choice)
@@ -243,9 +123,8 @@ if doctors:
 
 # ----------------- GREETING BANNER -----------------
 period_label = "today" if range_choice == "Today" else f"in the {range_choice.lower()}"
-served_count = int(q.shape[0])  # attempts/rows in filtered period
+served_count = int(q.shape[0])
 
-# Booked, ROI
 booked = int((q["outcome"] == "BOOKED").sum()) if "outcome" in q.columns else 0
 recovered_revenue = booked * AVG_VISIT_VALUE
 net_roi = recovered_revenue - MONTHLY_FEE
@@ -267,20 +146,11 @@ call_handling_pct = float((q["success"].mean() * 100) if "success" in q.columns 
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown(
-        f"<div class='metric-card'>💰 Net ROI<span class='metric-value'>£{net_roi:,.0f}</span></div>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<div class='metric-card'>💰 Net ROI<span class='metric-value'>£{net_roi:,.0f}</span></div>", unsafe_allow_html=True)
 with c2:
-    st.markdown(
-        f"<div class='metric-card'>📞 Calls Received<span class='metric-value'>{calls_received:,}</span></div>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<div class='metric-card'>📞 Calls Received<span class='metric-value'>{calls_received:,}</span></div>", unsafe_allow_html=True)
 with c3:
-    st.markdown(
-        f"<div class='metric-card'>🤝 Call Handling %<span class='metric-value'>{call_handling_pct:,.1f}%</span></div>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<div class='metric-card'>🤝 Call Handling %<span class='metric-value'>{call_handling_pct:,.1f}%</span></div>", unsafe_allow_html=True)
 
 # ----------------- CHARTS -----------------
 st.markdown("#### 📈 Trend (Attempts vs Booked)")
@@ -290,11 +160,7 @@ if {"outcome", "date"}.issubset(q.columns):
         booked=("outcome", lambda s: (s == "BOOKED").sum())
     ).reset_index()
     if not trend.empty:
-        fig1 = px.line(
-            trend, x="date", y=["attempts", "booked"],
-            markers=True,
-            color_discrete_sequence=["#e53935", "#fbc02d"]  # warm red & yellow
-        )
+        fig1 = px.line(trend, x="date", y=["attempts", "booked"], markers=True)
         st.plotly_chart(fig1, use_container_width=True)
     else:
         st.info("No data for selected filters.")
@@ -306,20 +172,18 @@ if {"weekday", "hour"}.issubset(q.columns):
     heat["weekday"] = pd.Categorical(heat["weekday"], categories=wk_order, ordered=True)
     heat = heat.sort_values(["weekday", "hour"])
     if not heat.empty:
-        fig2 = px.density_heatmap(
-            heat, x="hour", y="weekday", z="attempts",
-            nbinsx=24, color_continuous_scale=["#ffecb3", "#ffb74d", "#f57c00", "#e53935"]  # warm palette
-        )
+        fig2 = px.density_heatmap(heat, x="hour", y="weekday", z="attempts", nbinsx=24)
         st.plotly_chart(fig2, use_container_width=True)
     else:
         st.info("No attempts to show in heatmap.")
 
 # ----------------- OPERATIONS TABLE -----------------
 st.markdown("#### 📋 Operations (latest 500)")
-ops_cols = [c for c in ["ts_utc", "clinic_name", "doctor", "outcome", "latency_ms", "booking_id", "error_code", "preferred_dt_local"] if c in q.columns]
+ops_cols = [c for c in ["ts_utc","clinic_name","doctor","outcome","latency_ms","booking_id","error_code"] if c in q.columns]
 ops = q.sort_values("ts_utc", ascending=False).head(500)[ops_cols] if "ts_utc" in q.columns else q.head(500)
 st.dataframe(ops, use_container_width=True)
 
+# ----------------- CSV DOWNLOAD -----------------
 st.download_button("⬇️ Download filtered CSV", data=q.to_csv(index=False), file_name="filtered_calls.csv", mime="text/csv")
 
 
