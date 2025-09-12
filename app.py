@@ -38,22 +38,33 @@ AVG_VISIT_VALUE = 200.0
 MONTHLY_FEE    = 100.0
 
 # ----------------- DATA LOADING -----------------
-@st.cache_data(ttl=60)
-def load_data() -> pd.DataFrame:
+@st.cache_data
+def load_data():
     try:
-        # Try Neon first
-        #conn = st.connection("postgres", type="sql")
-        #df = conn.query("SELECT * FROM call_test;", ttl=60)
-        st.success("Connected to Neon ✅")
+        conn = st.connection("postgres", type="sql")
+        df = conn.query("SELECT * FROM call_test;", ttl=0)  # no auto-caching from Neon
+        st.success("Fetched fresh data from Neon ✅")
+        return df
     except Exception as e:
-        # Fallback to local CSV
         st.warning(f"Neon not available, using local CSV. Error: {e}")
-        if os.path.exists("call_audit_1.csv"):
-            df = pd.read_csv("call_audit_1.csv")
+        if os.path.exists("call_test_dummy.csv"):
+            return pd.read_csv("call_test_dummy.csv")
         else:
             st.error("No Neon connection and no local CSV file found.")
             st.stop()
-    return df
+
+# ----------------- REFRESH BUTTON -----------------
+if st.button("🔄 Refresh Data from Neon"):
+    st.cache_data.clear()   # clear cache so next load is fresh
+    df = load_data()
+else:
+    # Load cached data (does NOT hit Neon unless you pressed button)
+    if "df" not in st.session_state:
+        df = load_data()
+        st.session_state.df = df
+    else:
+        df = st.session_state.df
+
 
 # Load once
 df = load_data()
