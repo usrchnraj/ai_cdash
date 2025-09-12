@@ -42,8 +42,8 @@ MONTHLY_FEE    = 100.0
 def load_data() -> pd.DataFrame:
     try:
         # Try Neon first
-        conn = st.connection("postgres", type="sql")
-        df = conn.query("SELECT * FROM call_test;", ttl=60)
+        #conn = st.connection("postgres", type="sql")
+        #df = conn.query("SELECT * FROM call_test;", ttl=60)
         st.success("Connected to Neon ✅")
     except Exception as e:
         # Fallback to local CSV
