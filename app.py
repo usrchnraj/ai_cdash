@@ -42,7 +42,7 @@ MONTHLY_FEE    = 100.0
 def load_data():
     try:
         conn = st.connection("postgres", type="sql")
-        df = conn.query("SELECT * FROM call_test;", ttl=0)  # no auto-caching from Neon
+        df = conn.query("SELECT * FROM call_test;", ttl=0)  # no auto-refresh
         st.success("Fetched fresh data from Neon ✅")
         return df
     except Exception as e:
@@ -57,17 +57,14 @@ def load_data():
 if st.button("🔄 Refresh Data from Neon"):
     st.cache_data.clear()   # clear cache so next load is fresh
     df = load_data()
+    st.session_state.df = df   # store in session for reuse
 else:
-    # Load cached data (does NOT hit Neon unless you pressed button)
-    if "df" not in st.session_state:
+    # If already in session, reuse it
+    if "df" in st.session_state:
+        df = st.session_state.df
+    else:
         df = load_data()
         st.session_state.df = df
-    else:
-        df = st.session_state.df
-
-
-# Load once
-df = load_data()
 
 # ---- Transformations ----
 if "ts_utc" in df.columns:
