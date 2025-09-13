@@ -153,13 +153,65 @@ st.markdown(
 calls_received = int(q.shape[0])
 call_handling_pct = float((q["success"].mean() * 100) if "success" in q.columns and len(q) else 0.0)
 
-c1, c2, c3 = st.columns(3)
+# --- New Metric: Cancellation Filled % ---
+# rows that represent a cancellation event (booking_id is NULL, cancelled_booking_id exists)
+cancellation_rows = q[(q["cancelled_booking_id"].notna()) & (q["booking_id"].isna())]
+
+if not cancellation_rows.empty:
+    cancelled_ids = set(cancellation_rows["cancelled_booking_id"])
+
+    # rows that represent a refill (new booking_id, and it references a cancelled one)
+    rebooked_rows = q[(q["booking_id"].notna()) & (q["cancelled_booking_id"].notna())]
+    rebooked_ids = set(rebooked_rows["cancelled_booking_id"])
+
+    # intersection gives us cancelled bookings that actually got rebooked
+    filled_count = len(cancelled_ids.intersection(rebooked_ids))
+    cancellation_filled_pct = (filled_count / len(cancelled_ids)) * 100
+else:
+    cancellation_filled_pct = 0.0
+
+
+
+# --- New Metric: Schedule Scrubbing % ---
+scrubbed = q[q["slot_check_needed"] == True]
+if not scrubbed.empty:
+    valid_scrubbed = scrubbed[scrubbed["outcome"] == "BOOKED"]
+    schedule_scrubbing_pct = (len(valid_scrubbed) / len(scrubbed)) * 100
+else:
+    schedule_scrubbing_pct = 0.0
+
+# Show all 5 KPIs side by side
+c1, c2, c3, c4, c5 = st.columns(5)
+
 with c1:
-    st.markdown(f"<div class='metric-card'>💰 Net ROI<span class='metric-value'>£{net_roi:,.0f}</span></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='metric-card'>Recovered Revenue 💰<span class='metric-value'>£{recovered_revenue:,.0f}</span></div>",
+        unsafe_allow_html=True
+    )
+
 with c2:
-    st.markdown(f"<div class='metric-card'>📞 Calls Received<span class='metric-value'>{calls_received:,}</span></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='metric-card'>Calls Received 📞<span class='metric-value'>{calls_received:,}</span></div>",
+        unsafe_allow_html=True
+    )
+
 with c3:
-    st.markdown(f"<div class='metric-card'>🤝 Call Handling %<span class='metric-value'>{call_handling_pct:,.1f}%</span></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='metric-card'>Call Handling % 🌟<span class='metric-value'>{call_handling_pct:,.1f}%</span></div>",
+        unsafe_allow_html=True
+    )
+
+with c4:
+    st.markdown(
+        f"<div class='metric-card'>Cancellation Filled % 🔄<span class='metric-value'>{cancellation_filled_pct:,.1f}%</span></div>",
+        unsafe_allow_html=True
+    )
+
+with c5:
+    st.markdown(
+        f"<div class='metric-card'>Schedule Scrubbing % 🧹<span class='metric-value'>{schedule_scrubbing_pct:,.1f}%</span></div>",
+        unsafe_allow_html=True
+    )
 
 # ----------------- CHARTS -----------------
 st.markdown("#### 📈 Trend (Attempts vs Booked)")
