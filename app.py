@@ -131,8 +131,9 @@ if doctors:
 
 # ----------------- GREETING BANNER -----------------
 period_label = "today" if range_choice == "Today" else f"in the {range_choice.lower()}"
-served_count = int(q.shape[0])
+served_count = int(q.shape[0])  # attempts/rows in filtered period
 
+# Booked, ROI
 booked = int((q["outcome"] == "BOOKED").sum()) if "outcome" in q.columns else 0
 recovered_revenue = booked * AVG_VISIT_VALUE
 net_roi = recovered_revenue - MONTHLY_FEE
@@ -140,9 +141,9 @@ net_roi = recovered_revenue - MONTHLY_FEE
 st.markdown(
     f"""
     <div class="banner">
-        🌞 Good {('morning' if datetime.now().hour < 12 else ('afternoon' if datetime.now().hour < 18 else 'evening'))}, Dr [Name]!<br>
+        🌞 Good {('morning' if datetime.now().hour < 12 else ('afternoon' if datetime.now().hour < 18 else 'evening'))}, <b>Dr. Rajesh!</b><br>
         We served <b>{served_count}</b> patients {period_label}.<br>
-        🎉 Your net ROI generated is <b>£{net_roi:,.0f}</b>. Keep shining! ✨
+        🎉 Your recovered revenue is <b>£{recovered_revenue:,.0f}</b>. Keep shining! ✨
     </div>
     """,
     unsafe_allow_html=True,
